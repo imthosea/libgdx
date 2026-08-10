@@ -72,6 +72,7 @@ public class Lwjgl3Application implements Lwjgl3ApplicationBase {
 	private volatile boolean running = true;
 	private final Array<Runnable> runnables = new Array<Runnable>();
 	private final Array<Runnable> executedRunnables = new Array<Runnable>();
+	private volatile boolean hasRunnables = false;
 	private final Array<LifecycleListener> lifecycleListeners = new Array<LifecycleListener>();
 	private static GLFWErrorCallback errorCallback;
 	private static GLVersion glVersion;
@@ -186,21 +187,24 @@ public class Lwjgl3Application implements Lwjgl3ApplicationBase {
 			}
 			GLFW.glfwPollEvents();
 
-			boolean shouldRequestRendering;
-			synchronized (runnables) {
-				shouldRequestRendering = runnables.size > 0;
-				executedRunnables.clear();
-				executedRunnables.addAll(runnables);
-				runnables.clear();
-			}
-			for (Runnable runnable : executedRunnables) {
-				runnable.run();
-			}
-			if (shouldRequestRendering) {
-				// Must follow Runnables execution so changes done by Runnables are reflected
-				// in the following render.
-				for (Lwjgl3Window window : windows) {
-					if (!window.getGraphics().isContinuousRendering()) window.requestRendering();
+			if (hasRunnables) {
+				boolean shouldRequestRendering;
+				synchronized (runnables) {
+					shouldRequestRendering = runnables.size > 0;
+					executedRunnables.clear();
+					executedRunnables.addAll(runnables);
+					runnables.clear();
+					hasRunnables = false;
+				}
+				for (Runnable runnable : executedRunnables) {
+					runnable.run();
+				}
+				if (shouldRequestRendering) {
+					// Must follow Runnables execution so changes done by Runnables are reflected
+					// in the following render.
+					for (Lwjgl3Window window : windows) {
+						if (!window.getGraphics().isContinuousRendering()) window.requestRendering();
+					}
 				}
 			}
 
@@ -381,6 +385,7 @@ public class Lwjgl3Application implements Lwjgl3ApplicationBase {
 	public void postRunnable (Runnable runnable) {
 		synchronized (runnables) {
 			runnables.add(runnable);
+			hasRunnables = true;
 		}
 	}
 
